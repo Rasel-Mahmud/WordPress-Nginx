@@ -1,0 +1,212 @@
+sudo apt update
+
+# Nginx
+sudo apt install nginx
+
+sudo systemctl stop nginx.service
+sudo systemctl start nginx.service
+sudo systemctl enable nginx.service
+
+# MariaDB
+sudo apt-get install mariadb-server mariadb-client
+
+sudo systemctl stop mariadb.service
+sudo systemctl start mariadb.service
+sudo systemctl enable mariadb.service
+
+sudo mysql_secure_installation
+
+# PHP 7.4
+sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:ondrej/php
+
+sudo apt update
+
+sudo apt install php7.4-fpm php7.4-common php7.4-mysql php7.4-gmp php7.4-curl php7.4-intl php7.4-mbstring php7.4-xmlrpc php7.4-gd php7.4-xml php7.4-cli php7.4-zip
+
+
+sudo nano /etc/php/7.4/fpm/php.ini
+
+file_uploads = On
+allow_url_fopen = On
+short_open_tag = On
+memory_limit = 256M
+cgi.fix_pathinfo = 0
+upload_max_filesize = 100M
+max_execution_time = 360
+date.timezone = America/Chicago
+
+# Create Database
+sudo mysql -u root -p
+
+CREATE DATABASE wpdb;
+
+CREATE USER 'wpdbuser'@'localhost' IDENTIFIED BY 'new_password_here';
+
+GRANT ALL ON wpdb.* TO 'wpdbuser'@'localhost' WITH GRANT OPTION;
+
+FLUSH PRIVILEGES;
+EXIT;
+
+# WordPress install
+cd /var/www
+wget https://wordpress.org/latest.tar.gz
+tar -xvzf latest.tar.gz
+sudo mv wordpress doamin_name
+
+# Permission
+sudo chown -R www-data:www-data /var/www/doamin_name
+sudo chmod -R 755 /var/www/doamin_name
+
+# Configure Nginx
+
+sudo nano /etc/nginx/sites-available/domain_name
+
+server {
+  listen 80;
+  listen [::]:80;
+  root /var/www/domain_name;
+  index  index.php index.html index.htm;
+  server_name  example.com www.example.com;
+
+  client_max_body_size 100M;
+  autoindex off;
+  location / {
+    try_files $uri $uri/ /index.php?$args;
+  }
+
+  location ~ \.php$ {
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+  }
+}
+
+sudo ln -s /etc/nginx/sites-available/domain_name /etc/nginx/sites-enabled/
+
+sudo systemctl restart nginx.service
+
+# Let’s Encrypt
+sudo apt update
+sudo apt-get install letsencrypt
+
+sudo certbot certonly --manual --preferred-challenges=dns --email admin@example.com --server https://acme-v02.api.letsencrypt.org/directory --agree-tos -d example.com -d *.example.com
+
+
+server
+{
+	# Listen
+	listen 80;
+	listen [::]:80;
+	listen 443 ssl http2;
+	listen [::]:443 ssl http2;
+
+	# Directory & Server Naming
+	root /var/www/yourdomain.com;
+	index index.php index.html;
+	server_name yourdomain.com www.yourdomain.com;
+	http2_push_preload on;
+
+	# HTTP to HTTPS redirection
+	if ($scheme != "https")
+	{
+		return 301 https://$host$request_uri;
+	}
+
+	# SSL
+	ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+	ssl_trusted_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+
+	# Disable Hidden FIle Access Except Lets Encrypt Verification
+	location ~ /\.well-known
+	{
+		allow all;
+	}
+
+	# Nginx Logging
+	access_log /var/log/nginx/yourdomain.com-access.log;
+	error_log /var/log/nginx/yourdomain.com-error.log warn;
+
+	# Max Upload Size
+	client_max_body_size 100M;
+
+	# Permalink Support
+	location / {
+		try_files $uri $uri/ /index.php?$args;
+	}
+
+	# PHP Upsteam
+	location ~ \.php$ {
+         include snippets/fastcgi-php.conf;
+         fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+         include fastcgi_params;
+    }
+
+	# WordPress: deny wp-content, wp-includes php files
+	location ~* ^/(?:wp-content|wp-includes)/.*\.php$
+	{
+		deny all;
+	}
+
+	# WordPress: Deny nasty stuff uploads that aren’t images, videos, music, etc
+	location ~* ^/wp-content/uploads/.*.(html|htm|shtml|php|js|swf)$
+	{
+		deny all;
+	}
+
+	# WordPress: deny scripts and styles concat
+	location ~* \/wp-admin\/load-(?:scripts|styles)\.php
+	{
+		deny all;
+	}
+
+	# WordPress: deny general stuff
+	location ~* ^/(?:xmlrpc\.php|wp-links-opml\.php|wp-config\.php|wp-config-sample\.php|wp-comments-post\.php|readme\.html|license\.txt)$
+	{
+		deny all;
+	}
+
+	# Robot Text Logging Off
+	location = /robots.txt
+	{
+	    allow all;
+	    log_not_found off;
+	    access_log off;
+	}
+
+	# Fav ICON Disable
+	location = /favicon.ico
+	{
+	    log_not_found off;
+	    access_log off;
+	}
+
+	# WordPRess: Cache
+	location ~*  \.(jpg|jpeg|png|gif|ico|css|js|pdf)$
+	{
+		expires 7d;
+		log_not_found off;
+		access_log off;
+	}
+
+}
+
+# Edit the default IP access
+sudo nano /etc/nginx/sites-available/default
+
+server
+{
+		listen 80 default_server;
+		listen [::]:80 default_server;
+		#listen 443 ssl http2 default_server;
+		#listen [::]:443 ssl http2 default_server;
+		server_name _;
+		return 444;
+}
+
+# Reaload the server and php
+sudo systemctl reload nginx
+sudo systemctl reload php7.4-fpm
