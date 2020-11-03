@@ -5,3 +5,6 @@ Credit
 2. https://gist.github.com/amanjuman/21a439d4dfad68dbad9245ff1a18bf1e
 
 See the `wordpress.txt` file for details
+
+Here is the solution for login mysql in 3rd party client
+https://askubuntu.com/questions/1029177/error-1698-28000-access-denied-for-user-rootlocalhost-at-ubuntu-18-04
